@@ -1,0 +1,39 @@
+menu "Simple Async HTTP Request"
+
+choice LOG_LOCAL_LEVEL_ASYNC_HTTP
+    bool "ASYNC_HTTP log verbosity"
+    default LOG_LOCAL_LEVEL_ASYNC_HTTP_INFO
+    help
+        Specify how much output to compile into the binary.
+        You can set lower verbosity level at runtime using
+        esp_log_level_set function.
+
+        Note that this setting limits which log statements
+        are compiled into the program. So setting this to,
+        say, "Warning" would mean that changing log level
+        to "Debug" at runtime will not be possible.
+
+    config LOG_LOCAL_LEVEL_ASYNC_HTTP_NONE
+        bool "No output"
+    config LOG_LOCAL_LEVEL_ASYNC_HTTP_ERROR
+        bool "Error"
+    config LOG_LOCAL_LEVEL_ASYNC_HTTP_WARN
+        bool "Warning"
+    config LOG_LOCAL_LEVEL_ASYNC_HTTP_INFO
+        bool "Info"
+    config LOG_LOCAL_LEVEL_ASYNC_HTTP_DEBUG
+        bool "Debug"
+    config LOG_LOCAL_LEVEL_ASYNC_HTTP_VERBOSE
+        bool "Verbose"
+endchoice
+
+config LOG_LOCAL_LEVEL_ASYNC_HTTP
+    int
+    default 0 if LOG_LOCAL_LEVEL_ASYNC_HTTP_NONE
+    default 1 if LOG_LOCAL_LEVEL_ASYNC_HTTP_ERROR
+    default 2 if LOG_LOCAL_LEVEL_ASYNC_HTTP_WARN
+    default 3 if LOG_LOCAL_LEVEL_ASYNC_HTTP_INFO
+    default 4 if LOG_LOCAL_LEVEL_ASYNC_HTTP_DEBUG
+    default 5 if LOG_LOCAL_LEVEL_ASYNC_HTTP_VERBOSE
+
+endmenu
