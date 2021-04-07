@@ -26,7 +26,8 @@ constexpr int START_REQUEST_BIT = BIT1;
 constexpr int REQUEST_FINISHED_BIT = BIT2;
 } // namespace
 
-AsyncHttpRequest::AsyncHttpRequest(espcpputils::CoreAffinity coreAffinity) :
+AsyncHttpRequest::AsyncHttpRequest(const char *taskName, espcpputils::CoreAffinity coreAffinity) :
+    m_taskName{taskName},
     m_coreAffinity{coreAffinity}
 {
     assert(eventGroup.handle);
@@ -173,7 +174,7 @@ std::optional<std::string> AsyncHttpRequest::startTask()
     if (taskHandle)
         return "task already started";
 
-    const auto result = espcpputils::createTask(requestTask, "httpRequestTask", 4096, this, 10, &taskHandle, m_coreAffinity);
+    const auto result = espcpputils::createTask(requestTask, m_taskName, 4096, this, 10, &taskHandle, m_coreAffinity);
     if (result != pdPASS)
         return std::string{"failed creating http task "} + std::to_string(result);
 

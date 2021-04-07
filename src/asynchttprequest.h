@@ -18,7 +18,7 @@
 class AsyncHttpRequest
 {
 public:
-    AsyncHttpRequest(espcpputils::CoreAffinity coreAffinity);
+    AsyncHttpRequest(const char *taskName="httpRequestTask", espcpputils::CoreAffinity coreAffinity=espcpputils::CoreAffinity::Core1);
     ~AsyncHttpRequest();
 
     std::optional<std::string> start(const std::string &url);
@@ -45,5 +45,6 @@ private:
     std::string url;
     esp_http_client_config_t config;
 
+    const char * const m_taskName;
     const espcpputils::CoreAffinity m_coreAffinity;
 };
