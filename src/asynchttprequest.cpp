@@ -185,7 +185,7 @@ std::optional<std::string> AsyncHttpRequest::start(const std::string &url)
     }
     else
     {
-        const auto result = client.set_url(url.c_str());
+        const auto result = client.set_url(url);
         ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_DEBUG : ESP_LOG_ERROR), TAG, "client.set_url() returned: %s (%s)", esp_err_to_name(result), url.c_str());
         if (result != ESP_OK)
             return std::string{"client.set_url() failed: "} + esp_err_to_name(result) + " (" + url + ')';
