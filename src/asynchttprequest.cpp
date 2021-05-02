@@ -54,7 +54,7 @@ std::optional<std::string> AsyncHttpRequest::startTask()
 
     eventGroup.clearBits(TASK_RUNNING | START_REQUEST_BIT | REQUEST_RUNNING_BIT | REQUEST_FINISHED_BIT | END_TASK_BIT | TASK_ENDED);
 
-    const auto result = espcpputils::createTask(requestTask, m_taskName, 4096, this, 10, &taskHandle, m_coreAffinity);
+    const auto result = espcpputils::createTask(requestTask, m_taskName, 2048, this, 10, &taskHandle, m_coreAffinity);
     if (result != pdPASS)
     {
         auto msg = std::string{"failed creating http task "} + std::to_string(result);
