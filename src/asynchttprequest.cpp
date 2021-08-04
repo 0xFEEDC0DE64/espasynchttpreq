@@ -12,6 +12,9 @@
 // esp-idf includes
 #include <esp_log.h>
 
+// 3rdparty lib includes
+#include <fmt/core.h>
+
 // local includes
 #include "cleanuphelper.h"
 #include "taskutils.h"
@@ -34,7 +37,7 @@ AsyncHttpRequest::AsyncHttpRequest(const char *taskName, espcpputils::CoreAffini
     m_taskName{taskName},
     m_coreAffinity{coreAffinity}
 {
-    assert(eventGroup.handle);
+    assert(m_eventGroup.handle);
 }
 
 AsyncHttpRequest::~AsyncHttpRequest()
@@ -42,201 +45,201 @@ AsyncHttpRequest::~AsyncHttpRequest()
     endTask();
 }
 
-std::optional<std::string> AsyncHttpRequest::startTask()
+tl::expected<void, std::string> AsyncHttpRequest::startTask()
 {
-    if (const auto bits = eventGroup.getBits();
-        bits & TASK_RUNNING || taskHandle)
+    if (const auto bits = m_eventGroup.getBits();
+        bits & TASK_RUNNING || m_taskHandle)
     {
         constexpr auto msg = "task already started";
         ESP_LOGW(TAG, "%s", msg);
-        return msg;
+        return tl::make_unexpected(msg);
     }
 
-    eventGroup.clearBits(TASK_RUNNING | START_REQUEST_BIT | REQUEST_RUNNING_BIT | REQUEST_FINISHED_BIT | END_TASK_BIT | TASK_ENDED);
+    m_eventGroup.clearBits(TASK_RUNNING | START_REQUEST_BIT | REQUEST_RUNNING_BIT | REQUEST_FINISHED_BIT | END_TASK_BIT | TASK_ENDED);
 
-    const auto result = espcpputils::createTask(requestTask, m_taskName, 2048, this, 10, &taskHandle, m_coreAffinity);
+    const auto result = espcpputils::createTask(requestTask, m_taskName, 2048, this, 10, &m_taskHandle, m_coreAffinity);
     if (result != pdPASS)
     {
-        auto msg = std::string{"failed creating http task "} + std::to_string(result);
-        ESP_LOGE(TAG, "%s", msg.c_str());
-        return msg;
+        auto msg = fmt::format("failed creating http task {}", result);
+        ESP_LOGE(TAG, "%.*s", msg.size(), msg.data());
+        return tl::make_unexpected(std::move(msg));
     }
 
-    if (!taskHandle)
+    if (!m_taskHandle)
     {
         constexpr auto msg = "http task handle is null";
         ESP_LOGW(TAG, "%s", msg);
-        return msg;
+        return tl::make_unexpected(msg);
     }
 
     ESP_LOGD(TAG, "created http task %s", m_taskName);
 
-    if (const auto bits = eventGroup.waitBits(TASK_RUNNING, false, false, std::chrono::ceil<espcpputils::ticks>(1s).count());
+    if (const auto bits = m_eventGroup.waitBits(TASK_RUNNING, false, false, std::chrono::ceil<espcpputils::ticks>(1s).count());
         bits & TASK_RUNNING)
-        return std::nullopt;
+        return {};
 
     ESP_LOGW(TAG, "http task %s TASK_RUNNING bit not yet set...", m_taskName);
 
     while (true)
-        if (const auto bits = eventGroup.waitBits(TASK_RUNNING, false, false, portMAX_DELAY);
+        if (const auto bits = m_eventGroup.waitBits(TASK_RUNNING, false, false, portMAX_DELAY);
             bits & TASK_RUNNING)
             break;
 
-    return std::nullopt;
+    return {};
 }
 
-std::optional<std::string> AsyncHttpRequest::endTask()
+tl::expected<void, std::string> AsyncHttpRequest::endTask()
 {
-    if (const auto bits = eventGroup.getBits();
+    if (const auto bits = m_eventGroup.getBits();
         !(bits & TASK_RUNNING))
-        return std::nullopt;
+        return {};
     else if (bits & END_TASK_BIT)
     {
         constexpr auto msg = "Another end request is already pending";
         ESP_LOGE(TAG, "%s", msg);
-        return msg;
+        return tl::make_unexpected(msg);
     }
 
-    eventGroup.setBits(END_TASK_BIT);
+    m_eventGroup.setBits(END_TASK_BIT);
 
-    if (const auto bits = eventGroup.waitBits(TASK_ENDED, true, false, std::chrono::ceil<espcpputils::ticks>(1s).count());
+    if (const auto bits = m_eventGroup.waitBits(TASK_ENDED, true, false, std::chrono::ceil<espcpputils::ticks>(1s).count());
         bits & TASK_ENDED)
     {
         ESP_LOGD(TAG, "http task %s ended", m_taskName);
-        return std::nullopt;
+        return {};
     }
 
     ESP_LOGW(TAG, "http task %s TASK_ENDED bit not yet set...", m_taskName);
 
     while (true)
-        if (const auto bits = eventGroup.waitBits(TASK_ENDED, true, false, portMAX_DELAY);
+        if (const auto bits = m_eventGroup.waitBits(TASK_ENDED, true, false, portMAX_DELAY);
             bits & TASK_ENDED)
             break;
 
     ESP_LOGD(TAG, "http task %s ended", m_taskName);
 
-    return std::nullopt;
+    return {};
 }
 
-std::optional<std::string> AsyncHttpRequest::createClient(const std::string &url)
+tl::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view url)
 {
-    if (client)
+    if (m_client)
     {
-        constexpr auto msg = "client already created";
+        constexpr auto msg = "m_client already created";
         ESP_LOGE(TAG, "%s", msg);
-        return msg;
+        return tl::make_unexpected(msg);
     }
 
     esp_http_client_config_t config{};
-    config.url = url.c_str();
+    config.url = url.data();
     config.event_handler = httpEventHandler;
     config.user_data = this;
 
-    client = espcpputils::http_client{&config};
+    m_client = espcpputils::http_client{&config};
 
-    if (!client)
+    if (!m_client)
     {
         constexpr auto msg = "http client could not be constructed";
         ESP_LOGE(TAG, "%s", msg);
-        return msg;
+        return tl::make_unexpected(msg);
     }
 
     ESP_LOGD(TAG, "created http client %s", m_taskName);
 
-    return std::nullopt;
+    return {};
 }
 
-std::optional<std::string> AsyncHttpRequest::deleteClient()
+tl::expected<void, std::string> AsyncHttpRequest::deleteClient()
 {
-    if (!client)
-        return std::nullopt;
+    if (!m_client)
+        return {};
 
     if (inProgress())
     {
         constexpr auto msg = "another request still in progress";
         ESP_LOGW(TAG, "%s", msg);
-        return msg;
+        return tl::make_unexpected(msg);
     }
 
-    client = {};
+    m_client = {};
 
-    return std::nullopt;
+    return {};
 }
 
-std::optional<std::string> AsyncHttpRequest::start(const std::string &url)
+tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url)
 {
-    if (!taskHandle)
+    if (!m_taskHandle)
     {
-        if (const auto failed = startTask())
-            return *failed;
+        if (const auto result = startTask(); !result)
+            return tl::make_unexpected(std::move(result).error());
     }
 
     if (inProgress())
     {
         constexpr auto msg = "another request still in progress";
         ESP_LOGW(TAG, "%s", msg);
-        return msg;
+        return tl::make_unexpected(msg);
     }
 
-    if (!client)
+    if (!m_client)
     {
-        if (const auto failed = createClient(url))
-            return *failed;
+        if (const auto result = createClient(url); !result)
+            return tl::make_unexpected(std::move(result).error());
     }
     else
     {
-        const auto result = client.set_url(url);
-        ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_DEBUG : ESP_LOG_ERROR), TAG, "client.set_url() returned: %s (%s)", esp_err_to_name(result), url.c_str());
+        const auto result = m_client.set_url(url);
+        ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_DEBUG : ESP_LOG_ERROR), TAG, "m_client.set_url() returned: %s (%.*s)", esp_err_to_name(result), url.size(), url.data());
         if (result != ESP_OK)
-            return std::string{"client.set_url() failed: "} + esp_err_to_name(result) + " (" + url + ')';
+            return tl::make_unexpected(fmt::format("m_client.set_url() failed: {} ({})", esp_err_to_name(result), url));
     }
 
-    buf.clear();
+    m_buf.clear();
 
     clearFinished();
-    eventGroup.setBits(START_REQUEST_BIT);
+    m_eventGroup.setBits(START_REQUEST_BIT);
 
-    return std::nullopt;
+    return {};
 }
 
 bool AsyncHttpRequest::inProgress() const
 {
-    return eventGroup.getBits() & (START_REQUEST_BIT | REQUEST_RUNNING_BIT);
+    return m_eventGroup.getBits() & (START_REQUEST_BIT | REQUEST_RUNNING_BIT);
 }
 
 bool AsyncHttpRequest::finished() const
 {
-    return eventGroup.getBits() & REQUEST_FINISHED_BIT;
+    return m_eventGroup.getBits() & REQUEST_FINISHED_BIT;
 }
 
-std::optional<std::string> AsyncHttpRequest::failed() const
+tl::expected<void, std::string> AsyncHttpRequest::result() const
 {
-    if (const auto bits = eventGroup.getBits();
+    if (const auto bits = m_eventGroup.getBits();
         bits & REQUEST_RUNNING_BIT)
     {
         constexpr auto msg = "request still running";
         ESP_LOGW(TAG, "%s", msg);
-        return msg;
+        return tl::make_unexpected(msg);
     }
     else if (!(bits & REQUEST_FINISHED_BIT))
     {
         constexpr auto msg = "request not finished";
         ESP_LOGW(TAG, "%s", msg);
-        return msg;
+        return tl::make_unexpected(msg);
     }
 
-    if (result != ESP_OK)
-        return std::string{"http request failed: "} + esp_err_to_name(result);
+    if (m_result != ESP_OK)
+        return tl::make_unexpected(fmt::format("http request failed: {}", esp_err_to_name(m_result)));
 
-    if (statusCode != HttpStatus_Ok)
-        return std::string{"http request failed: "} + std::to_string(statusCode);
+    if (m_statusCode != HttpStatus_Ok)
+        return tl::make_unexpected(fmt::format("http request failed: {}", m_statusCode));
 
-    return std::nullopt;
+    return {};
 }
 
 void AsyncHttpRequest::clearFinished()
 {
-    eventGroup.clearBits(REQUEST_FINISHED_BIT);
+    m_eventGroup.clearBits(REQUEST_FINISHED_BIT);
 }
 
 esp_err_t AsyncHttpRequest::httpEventHandler(esp_http_client_event_t *evt)
@@ -255,7 +258,7 @@ esp_err_t AsyncHttpRequest::httpEventHandler(esp_http_client_event_t *evt)
                 if (std::sscanf(evt->header_value, "%u", &size) == 1)
                 {
                     //ESP_LOGD(TAG, "reserving %u bytes for http buffer", size);
-                    _this->buf.reserve(size);
+                    _this->m_buf.reserve(size);
                 }
                 else
                 {
@@ -270,7 +273,7 @@ esp_err_t AsyncHttpRequest::httpEventHandler(esp_http_client_event_t *evt)
         else if (evt->data_len <= 0)
             ESP_LOGW(TAG, "handler with invalid data_len %i", evt->data_len);
         else
-            _this->buf += std::string_view((const char *)evt->data, evt->data_len);
+            _this->m_buf += std::string_view((const char *)evt->data, evt->data_len);
 
         break;
     default:;
@@ -285,54 +288,59 @@ void AsyncHttpRequest::requestTask(void *ptr)
 
     assert(_this);
 
-    _this->eventGroup.setBits(TASK_RUNNING);
+    _this->requestTask();
+}
+
+void AsyncHttpRequest::requestTask()
+{
+    m_eventGroup.setBits(TASK_RUNNING);
 
     // cleanup on task exit
     auto helper = cpputils::makeCleanupHelper([&](){
-        _this->eventGroup.clearBits(TASK_RUNNING);
-        _this->eventGroup.setBits(TASK_ENDED);
-        _this->taskHandle = NULL;
+        m_eventGroup.clearBits(TASK_RUNNING);
+        m_eventGroup.setBits(TASK_ENDED);
+        m_taskHandle = NULL;
         vTaskDelete(NULL);
     });
 
     while (true)
     {
-        if (const auto bits = _this->eventGroup.waitBits(START_REQUEST_BIT|END_TASK_BIT, true, false, portMAX_DELAY);
+        if (const auto bits = m_eventGroup.waitBits(START_REQUEST_BIT|END_TASK_BIT, true, false, portMAX_DELAY);
             bits & END_TASK_BIT)
             break;
         else if (!(bits & START_REQUEST_BIT))
             continue;
 
-        assert(_this->client);
+        assert(m_client);
 
         {
-            const auto bits = _this->eventGroup.getBits();
+            const auto bits = m_eventGroup.getBits();
             assert(!(bits & START_REQUEST_BIT));
             assert(!(bits & REQUEST_RUNNING_BIT));
             assert(!(bits & REQUEST_FINISHED_BIT));
         }
 
-        _this->eventGroup.setBits(REQUEST_RUNNING_BIT);
+        m_eventGroup.setBits(REQUEST_RUNNING_BIT);
 
         auto helper2 = cpputils::makeCleanupHelper([&](){
-            _this->eventGroup.clearBits(REQUEST_RUNNING_BIT);
-            _this->eventGroup.setBits(REQUEST_FINISHED_BIT);
+            m_eventGroup.clearBits(REQUEST_RUNNING_BIT);
+            m_eventGroup.setBits(REQUEST_FINISHED_BIT);
         });
 
         {
             esp_err_t result;
             do
-                result = _this->client.perform();
+                result = m_client.perform();
             while (result == EAGAIN || result == EINPROGRESS);
-            ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_VERBOSE : ESP_LOG_ERROR), TAG, "client.perform() returned: %s", esp_err_to_name(result));
-            _this->result = result;
-            _this->statusCode = _this->client.get_status_code();
+            ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_VERBOSE : ESP_LOG_ERROR), TAG, "m_client.perform() returned: %s", esp_err_to_name(result));
+            m_result = result;
+            m_statusCode = m_client.get_status_code();
         }
 
         // workaround for esp-idf bug, every request after the first one fails with ESP_ERR_HTTP_FETCH_HEADER
-        const auto result = _this->client.close();
-        ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_VERBOSE : ESP_LOG_ERROR), TAG, "client.close() returned: %s", esp_err_to_name(result));
+        const auto result = m_client.close();
+        ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_VERBOSE : ESP_LOG_ERROR), TAG, "m_client.close() returned: %s", esp_err_to_name(result));
         if (result != ESP_OK)
-            _this->client = {};
+            m_client = {};
     }
 }
