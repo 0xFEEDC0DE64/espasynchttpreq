@@ -36,6 +36,8 @@ public:
     bool finished() const;
     tl::expected<void, std::string> result() const;
 
+    int statusCode() const { return m_statusCode; }
+
     void clearFinished();
 
     const std::string &buffer() const { return m_buf; }
