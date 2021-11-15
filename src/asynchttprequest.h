@@ -43,8 +43,12 @@ public:
     const std::string &buffer() const { return m_buf; }
     std::string &&takeBuffer() { return std::move(m_buf); }
 
+    std::size_t sizeLimit() const { return m_sizeLimit; }
+    void setSizeLimit(std::size_t sizeLimit) { m_sizeLimit = sizeLimit; }
+
 private:
-    static esp_err_t httpEventHandler(esp_http_client_event_t *evt);
+    esp_err_t httpEventHandler(esp_http_client_event_t *evt);
+    static esp_err_t staticHttpEventHandler(esp_http_client_event_t *evt);
     static void requestTask(void *ptr);
     void requestTask();
 
@@ -54,6 +58,7 @@ private:
     espcpputils::event_group m_eventGroup;
     esp_err_t m_result{};
     int m_statusCode{};
+    std::size_t m_sizeLimit{4096};
 
     const char * const m_taskName;
     const espcpputils::CoreAffinity m_coreAffinity;

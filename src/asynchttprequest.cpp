@@ -8,6 +8,7 @@
 #include <string_view>
 #include <cstring>
 #include <assert.h>
+#include <algorithm>
 
 // esp-idf includes
 #include <esp_log.h>
@@ -132,7 +133,7 @@ tl::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view 
 
     esp_http_client_config_t config{};
     config.url = url.data();
-    config.event_handler = httpEventHandler;
+    config.event_handler = staticHttpEventHandler;
     config.user_data = this;
 
     m_client = espcpputils::http_client{&config};
@@ -244,11 +245,8 @@ void AsyncHttpRequest::clearFinished()
 
 esp_err_t AsyncHttpRequest::httpEventHandler(esp_http_client_event_t *evt)
 {
-    auto _this = reinterpret_cast<AsyncHttpRequest*>(evt->user_data);
-
-    assert(_this);
-
-    switch(evt->event_id) {
+    switch(evt->event_id)
+    {
     case HTTP_EVENT_ON_HEADER:
         if (evt->header_key && evt->header_value)
         {
@@ -258,7 +256,7 @@ esp_err_t AsyncHttpRequest::httpEventHandler(esp_http_client_event_t *evt)
                 if (std::sscanf(evt->header_value, "%u", &size) == 1)
                 {
                     //ESP_LOGD(TAG, "reserving %u bytes for http buffer", size);
-                    _this->m_buf.reserve(size);
+                    m_buf.reserve(std::min(size, m_sizeLimit));
                 }
                 else
                 {
@@ -272,14 +270,31 @@ esp_err_t AsyncHttpRequest::httpEventHandler(esp_http_client_event_t *evt)
             ESP_LOGW(TAG, "handler with invalid data ptr");
         else if (evt->data_len <= 0)
             ESP_LOGW(TAG, "handler with invalid data_len %i", evt->data_len);
+        else if (m_buf.size() >= m_sizeLimit)
+            return ESP_ERR_NO_MEM;
         else
-            _this->m_buf += std::string_view((const char *)evt->data, evt->data_len);
+        {
+            const auto remainingSize = m_sizeLimit - m_buf.size();
+            m_buf += std::string_view((const char *)evt->data, std::min<size_t>(evt->data_len, remainingSize));
+            if (remainingSize < evt->data_len)
+                return ESP_ERR_NO_MEM;
+        }
 
         break;
-    default:;
+    default:
+        ;
     }
 
     return ESP_OK;
+}
+
+esp_err_t AsyncHttpRequest::staticHttpEventHandler(esp_http_client_event_t *evt)
+{
+    auto _this = reinterpret_cast<AsyncHttpRequest*>(evt->user_data);
+
+    assert(_this);
+
+    return _this->httpEventHandler(evt);
 }
 
 void AsyncHttpRequest::requestTask(void *ptr)
