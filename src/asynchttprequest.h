@@ -3,6 +3,7 @@
 // system includes
 #include <string>
 #include <string_view>
+#include <map>
 
 // esp-idf includes
 #include <freertos/FreeRTOS.h>
@@ -29,7 +30,10 @@ public:
     tl::expected<void, std::string> createClient(std::string_view url);
     tl::expected<void, std::string> deleteClient();
 
-    tl::expected<void, std::string> start(std::string_view url);
+    tl::expected<void, std::string> start(std::string_view url,
+                                          esp_http_client_method_t method = HTTP_METHOD_GET,
+                                          const std::map<std::string, std::string> &requestHeaders = {},
+                                          std::string_view requestBody = {});
 
     bool inProgress() const;
 
@@ -46,6 +50,12 @@ public:
     std::size_t sizeLimit() const { return m_sizeLimit; }
     void setSizeLimit(std::size_t sizeLimit) { m_sizeLimit = sizeLimit; }
 
+    bool collectResponseHeaders() const { return m_collectResponseHeaders; }
+    void setCollectResponseHeaders(bool collectResponseHeaders) { m_collectResponseHeaders = collectResponseHeaders; }
+
+    const std::map<std::string, std::string> &responseHeaders() const { return m_responseHeaders; }
+    std::map<std::string, std::string> &&takeResponseHeaders() { return std::move(m_responseHeaders); }
+
 private:
     esp_err_t httpEventHandler(esp_http_client_event_t *evt);
     static esp_err_t staticHttpEventHandler(esp_http_client_event_t *evt);
@@ -59,6 +69,8 @@ private:
     esp_err_t m_result{};
     int m_statusCode{};
     std::size_t m_sizeLimit{4096};
+    bool m_collectResponseHeaders{};
+    std::map<std::string, std::string> m_responseHeaders;
 
     const char * const m_taskName;
     const espcpputils::CoreAffinity m_coreAffinity;
