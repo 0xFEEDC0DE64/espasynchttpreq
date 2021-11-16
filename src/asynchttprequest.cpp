@@ -252,9 +252,6 @@ tl::expected<void, std::string> AsyncHttpRequest::result() const
     if (m_result != ESP_OK)
         return tl::make_unexpected(fmt::format("http request failed: {}", esp_err_to_name(m_result)));
 
-    if (m_statusCode != HttpStatus_Ok)
-        return tl::make_unexpected(fmt::format("http request failed: {}", m_statusCode));
-
     return {};
 }
 
