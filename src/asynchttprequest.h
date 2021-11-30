@@ -34,6 +34,7 @@ public:
                                           esp_http_client_method_t method = HTTP_METHOD_GET,
                                           const std::map<std::string, std::string> &requestHeaders = {},
                                           std::string_view requestBody = {});
+    tl::expected<void, std::string> abort();
 
     bool inProgress() const;
 
