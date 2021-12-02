@@ -140,7 +140,7 @@ tl::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view 
 
     esp_http_client_config_t config{};
     config.url = url.data();
-    config.max_authorization_retries = 1;
+    config.max_authorization_retries = 2;
     config.event_handler = staticHttpEventHandler;
     config.user_data = this;
 
