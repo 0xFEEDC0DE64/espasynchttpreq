@@ -28,7 +28,8 @@ public:
     tl::expected<void, std::string> endTask();
     bool taskRunning() const;
 
-    tl::expected<void, std::string> createClient(std::string_view url);
+    tl::expected<void, std::string> createClient(std::string_view url,
+                                                 esp_http_client_method_t method = HTTP_METHOD_GET);
     tl::expected<void, std::string> deleteClient();
     bool hasClient() const;
 
@@ -36,8 +37,8 @@ public:
                                           esp_http_client_method_t method = HTTP_METHOD_GET,
                                           const std::map<std::string, std::string> &requestHeaders = {},
                                           std::string_view requestBody = {});
-    tl::expected<void, std::string> retry(std::string_view url,
-                                          esp_http_client_method_t method = HTTP_METHOD_GET,
+    tl::expected<void, std::string> retry(std::optional<std::string_view> url = std::nullopt,
+                                          std::optional<esp_http_client_method_t> method = std::nullopt,
                                           const std::map<std::string, std::string> &requestHeaders = {},
                                           std::string_view requestBody = {});
     tl::expected<void, std::string> abort();

@@ -138,7 +138,7 @@ bool AsyncHttpRequest::taskRunning() const
     return false;
 }
 
-tl::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view url)
+tl::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view url, esp_http_client_method_t method)
 {
     if (m_client)
     {
@@ -149,7 +149,8 @@ tl::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view 
 
     esp_http_client_config_t config{};
     config.url = url.data();
-    config.max_authorization_retries = 2;
+    config.max_authorization_retries = 1;
+    config.method = method;
     config.event_handler = staticHttpEventHandler;
     config.user_data = this;
 
@@ -214,24 +215,37 @@ tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
         return tl::make_unexpected(msg);
     }
 
-    if (auto result = createClient(url); !result)
+    if (auto result = createClient(url, method); !result)
         return tl::make_unexpected(std::move(result).error());
-
-    if (const auto result = m_client.set_method(method); result != ESP_OK)
-        return tl::make_unexpected(fmt::format("m_client.set_method() failed: {}", esp_err_to_name(result)));
 
     for (auto iter = std::cbegin(requestHeaders); iter != std::cend(requestHeaders); iter++)
         if (const auto result = m_client.set_header(iter->first, iter->second); result != ESP_OK)
-            return tl::make_unexpected(fmt::format("m_client.set_header() failed: {} ({} {})", esp_err_to_name(result), iter->first, iter->second));
+        {
+            auto msg = fmt::format("m_client.set_header() failed: {} ({} {})", esp_err_to_name(result), iter->first, iter->second);
+            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
+            return tl::make_unexpected(std::move(msg));
+        }
 
     if (!requestBody.empty())
     {
         if (const auto result = m_client.open(requestBody.size()); result != ESP_OK)
-            return tl::make_unexpected(fmt::format("m_client.open() failed: {} ({})", esp_err_to_name(result), requestBody.size()));
+        {
+            auto msg = fmt::format("m_client.open() failed: {} ({})", esp_err_to_name(result), requestBody.size());
+            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
+            return tl::make_unexpected(std::move(msg));
+        }
         if (const auto written = m_client.write(requestBody); written < 0)
-            return tl::make_unexpected(fmt::format("m_client.write() failed: {}", written));
+        {
+            auto msg = fmt::format("m_client.write() failed: {}", written);
+            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
+            return tl::make_unexpected(std::move(msg));
+        }
         else if (written != requestBody.size())
-            return tl::make_unexpected(fmt::format("m_client.write() written size mismatch: {} != {}", written, requestBody.size()));
+        {
+            auto msg = fmt::format("m_client.write() written size mismatch: {} != {}", written, requestBody.size());
+            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
+            return tl::make_unexpected(std::move(msg));
+        }
     }
 
     m_buf.clear();
@@ -242,8 +256,8 @@ tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
     return {};
 }
 
-tl::expected<void, std::string> AsyncHttpRequest::retry(std::string_view url,
-                                                        esp_http_client_method_t method,
+tl::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::string_view> url,
+                                                        std::optional<esp_http_client_method_t> method,
                                                         const std::map<std::string, std::string> &requestHeaders,
                                                         std::string_view requestBody)
 {
@@ -267,29 +281,50 @@ tl::expected<void, std::string> AsyncHttpRequest::retry(std::string_view url,
         return tl::make_unexpected(msg);
     }
 
-    if (!url.empty())
-    {
-        const auto result = m_client.set_url(url);
-        ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_DEBUG : ESP_LOG_ERROR), TAG, "m_client.set_url() returned: %s (%.*s)", esp_err_to_name(result), url.size(), url.data());
-        if (result != ESP_OK)
-            return tl::make_unexpected(fmt::format("m_client.set_url() failed: {} ({})", esp_err_to_name(result), url));
-    }
+    if (url)
+        if (const auto result = m_client.set_url(*url); result != ESP_OK)
+        {
+            auto msg = fmt::format("m_client.set_url() failed: {} ({})", esp_err_to_name(result), *url);
+            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
+            return tl::make_unexpected(std::move(msg));
+        }
 
-    if (const auto result = m_client.set_method(method); result != ESP_OK)
-        return tl::make_unexpected(fmt::format("m_client.set_method() failed: {}", esp_err_to_name(result)));
+    if (method)
+        if (const auto result = m_client.set_method(*method); result != ESP_OK)
+        {
+            auto msg = fmt::format("m_client.set_method() failed: {}", esp_err_to_name(result));
+            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
+            return tl::make_unexpected(std::move(msg));
+        }
 
     for (auto iter = std::cbegin(requestHeaders); iter != std::cend(requestHeaders); iter++)
         if (const auto result = m_client.set_header(iter->first, iter->second); result != ESP_OK)
-            return tl::make_unexpected(fmt::format("m_client.set_header() failed: {} ({} {})", esp_err_to_name(result), iter->first, iter->second));
+        {
+            auto msg = fmt::format("m_client.set_header() failed: {} ({} {})", esp_err_to_name(result), iter->first, iter->second);
+            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
+            return tl::make_unexpected(std::move(msg));
+        }
 
     if (!requestBody.empty())
     {
         if (const auto result = m_client.open(requestBody.size()); result != ESP_OK)
-            return tl::make_unexpected(fmt::format("m_client.open() failed: {} ({})", esp_err_to_name(result), requestBody.size()));
+        {
+            auto msg = fmt::format("m_client.open() failed: {} ({})", esp_err_to_name(result), requestBody.size());
+            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
+            return tl::make_unexpected(std::move(msg));
+        }
         if (const auto written = m_client.write(requestBody); written < 0)
-            return tl::make_unexpected(fmt::format("m_client.write() failed: {}", written));
+        {
+            auto msg = fmt::format("m_client.write() failed: {}", written);
+            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
+            return tl::make_unexpected(std::move(msg));
+        }
         else if (written != requestBody.size())
-            return tl::make_unexpected(fmt::format("m_client.write() written size mismatch: {} != {}", written, requestBody.size()));
+        {
+            auto msg = fmt::format("m_client.write() written size mismatch: {} != {}", written, requestBody.size());
+            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
+            return tl::make_unexpected(std::move(msg));
+        }
     }
 
     m_buf.clear();
@@ -456,6 +491,8 @@ void AsyncHttpRequest::requestTask()
             do
             {
                 result = m_client.perform();
+                ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_VERBOSE : (result == EAGAIN || result == EINPROGRESS ? ESP_LOG_INFO : ESP_LOG_WARN)),
+                                    TAG, "m_client.perform() returned: %s", esp_err_to_name(result));
 
                 if (m_eventGroup.clearBits(ABORT_REQUEST_BIT) & ABORT_REQUEST_BIT)
                 {
@@ -466,7 +503,6 @@ void AsyncHttpRequest::requestTask()
             }
             while (result == EAGAIN || result == EINPROGRESS);
 
-            ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_VERBOSE : ESP_LOG_ERROR), TAG, "m_client.perform() returned: %s", esp_err_to_name(result));
             m_result = result;
             m_statusCode = m_client.get_status_code();
         }
