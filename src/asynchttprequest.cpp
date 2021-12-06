@@ -129,6 +129,15 @@ tl::expected<void, std::string> AsyncHttpRequest::endTask()
     return {};
 }
 
+bool AsyncHttpRequest::taskRunning() const
+{
+    if (const auto bits = m_eventGroup.getBits();
+        bits & TASK_RUNNING_BIT)
+        return true;
+
+    return false;
+}
+
 tl::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view url)
 {
     if (m_client)
@@ -165,7 +174,7 @@ tl::expected<void, std::string> AsyncHttpRequest::deleteClient()
 
     if (inProgress())
     {
-        constexpr auto msg = "another request still in progress";
+        constexpr auto msg = "request still in progress";
         ESP_LOGW(TAG, "%s", msg);
         return tl::make_unexpected(msg);
     }
@@ -173,6 +182,11 @@ tl::expected<void, std::string> AsyncHttpRequest::deleteClient()
     m_client = {};
 
     return {};
+}
+
+bool AsyncHttpRequest::hasClient() const
+{
+    return m_client;
 }
 
 tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
@@ -193,12 +207,67 @@ tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
         return tl::make_unexpected(msg);
     }
 
-    if (!m_client)
+    if (m_client)
     {
-        if (auto result = createClient(url); !result)
+        constexpr auto msg = "http client not null";
+        ESP_LOGW(TAG, "%s", msg);
+        return tl::make_unexpected(msg);
+    }
+
+    if (auto result = createClient(url); !result)
+        return tl::make_unexpected(std::move(result).error());
+
+    if (const auto result = m_client.set_method(method); result != ESP_OK)
+        return tl::make_unexpected(fmt::format("m_client.set_method() failed: {}", esp_err_to_name(result)));
+
+    for (auto iter = std::cbegin(requestHeaders); iter != std::cend(requestHeaders); iter++)
+        if (const auto result = m_client.set_header(iter->first, iter->second); result != ESP_OK)
+            return tl::make_unexpected(fmt::format("m_client.set_header() failed: {} ({} {})", esp_err_to_name(result), iter->first, iter->second));
+
+    if (!requestBody.empty())
+    {
+        if (const auto result = m_client.open(requestBody.size()); result != ESP_OK)
+            return tl::make_unexpected(fmt::format("m_client.open() failed: {} ({})", esp_err_to_name(result), requestBody.size()));
+        if (const auto written = m_client.write(requestBody); written < 0)
+            return tl::make_unexpected(fmt::format("m_client.write() failed: {}", written));
+        else if (written != requestBody.size())
+            return tl::make_unexpected(fmt::format("m_client.write() written size mismatch: {} != {}", written, requestBody.size()));
+    }
+
+    m_buf.clear();
+
+    clearFinished();
+    m_eventGroup.setBits(START_REQUEST_BIT);
+
+    return {};
+}
+
+tl::expected<void, std::string> AsyncHttpRequest::retry(std::string_view url,
+                                                        esp_http_client_method_t method,
+                                                        const std::map<std::string, std::string> &requestHeaders,
+                                                        std::string_view requestBody)
+{
+    if (!m_taskHandle)
+    {
+        if (auto result = startTask(); !result)
             return tl::make_unexpected(std::move(result).error());
     }
-    else
+
+    if (inProgress())
+    {
+        constexpr auto msg = "another request still in progress";
+        ESP_LOGW(TAG, "%s", msg);
+        return tl::make_unexpected(msg);
+    }
+
+    if (!m_client)
+    {
+        constexpr auto msg = "http client is null";
+        ESP_LOGW(TAG, "%s", msg);
+        return tl::make_unexpected(msg);
+    }
+
+    if (!url.empty())
     {
         const auto result = m_client.set_url(url);
         ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_DEBUG : ESP_LOG_ERROR), TAG, "m_client.set_url() returned: %s (%.*s)", esp_err_to_name(result), url.size(), url.data());
@@ -405,7 +474,7 @@ void AsyncHttpRequest::requestTask()
         // workaround for esp-idf bug, every request after the first one fails with ESP_ERR_HTTP_FETCH_HEADER
         const auto result = m_client.close();
         ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_VERBOSE : ESP_LOG_ERROR), TAG, "m_client.close() returned: %s", esp_err_to_name(result));
-        if (result != ESP_OK)
-            m_client = {};
+        //if (result != ESP_OK)
+        //    m_client = {};
     }
 }
