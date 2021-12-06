@@ -138,7 +138,8 @@ bool AsyncHttpRequest::taskRunning() const
     return false;
 }
 
-tl::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view url, esp_http_client_method_t method)
+tl::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view url, esp_http_client_method_t method,
+                                                               int timeout_ms)
 {
     if (m_client)
     {
@@ -151,6 +152,7 @@ tl::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view 
     config.url = url.data();
     config.max_authorization_retries = 1;
     config.method = method;
+    config.timeout_ms = timeout_ms;
     config.event_handler = staticHttpEventHandler;
     config.user_data = this;
 
@@ -193,7 +195,8 @@ bool AsyncHttpRequest::hasClient() const
 tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
                                                         esp_http_client_method_t method,
                                                         const std::map<std::string, std::string> &requestHeaders,
-                                                        std::string_view requestBody)
+                                                        std::string_view requestBody,
+                                                        int timeout_ms)
 {
     if (!m_taskHandle)
     {
@@ -215,7 +218,7 @@ tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
         return tl::make_unexpected(msg);
     }
 
-    if (auto result = createClient(url, method); !result)
+    if (auto result = createClient(url, method, timeout_ms); !result)
         return tl::make_unexpected(std::move(result).error());
 
     for (auto iter = std::cbegin(requestHeaders); iter != std::cend(requestHeaders); iter++)
@@ -259,7 +262,8 @@ tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
 tl::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::string_view> url,
                                                         std::optional<esp_http_client_method_t> method,
                                                         const std::map<std::string, std::string> &requestHeaders,
-                                                        std::string_view requestBody)
+                                                        std::string_view requestBody,
+                                                        std::optional<int> timeout_ms)
 {
     if (!m_taskHandle)
     {
@@ -293,6 +297,14 @@ tl::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::strin
         if (const auto result = m_client.set_method(*method); result != ESP_OK)
         {
             auto msg = fmt::format("m_client.set_method() failed: {}", esp_err_to_name(result));
+            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
+            return tl::make_unexpected(std::move(msg));
+        }
+
+    if (timeout_ms)
+        if (const auto result = m_client.set_timeout_ms(*timeout_ms); result != ESP_OK)
+        {
+            auto msg = fmt::format("m_client.set_timeout_ms() failed: {}", esp_err_to_name(result));
             ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
             return tl::make_unexpected(std::move(msg));
         }
