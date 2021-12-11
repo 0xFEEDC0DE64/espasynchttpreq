@@ -160,9 +160,9 @@ tl::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view 
 
     if (!m_client)
     {
-        constexpr auto msg = "http client could not be constructed";
-        ESP_LOGE(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        auto msg = fmt::format("http client could not be constructed (url={})", url);
+        ESP_LOGE(TAG, "%.*s", msg.size(), msg.data());
+        return tl::make_unexpected(std::move(msg));
     }
 
     ESP_LOGD(TAG, "created http client %s", m_taskName);
