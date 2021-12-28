@@ -522,7 +522,7 @@ void AsyncHttpRequest::requestTask()
         // workaround for esp-idf bug, every request after the first one fails with ESP_ERR_HTTP_FETCH_HEADER
         const auto result = m_client.close();
         ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_VERBOSE : ESP_LOG_ERROR), TAG, "m_client.close() returned: %s", esp_err_to_name(result));
-        //if (result != ESP_OK)
-        //    m_client = {};
+        if (result != ESP_OK)
+            m_client = {};
     }
 }
