@@ -37,13 +37,15 @@ public:
     tl::expected<void, std::string> start(std::string_view url,
                                           esp_http_client_method_t method = HTTP_METHOD_GET,
                                           const std::map<std::string, std::string> &requestHeaders = {},
-                                          std::string_view requestBody = {},
-                                          int timeout_ms = 0);
+                                          std::string_view requestBody = {}, int timeout_ms = 0);
     tl::expected<void, std::string> retry(std::optional<std::string_view> url = std::nullopt,
                                           std::optional<esp_http_client_method_t> method = std::nullopt,
                                           const std::map<std::string, std::string> &requestHeaders = {},
-                                          std::string_view requestBody = {},
-                                          std::optional<int> timeout_ms = {});
+                                          std::string_view requestBody = {}
+#ifndef OLD_IDF
+                                          ,std::optional<int> timeout_ms = {}
+#endif
+                                         );
     tl::expected<void, std::string> abort();
 
     bool inProgress() const;

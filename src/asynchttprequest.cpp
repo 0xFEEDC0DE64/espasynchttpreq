@@ -195,8 +195,7 @@ bool AsyncHttpRequest::hasClient() const
 tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
                                                         esp_http_client_method_t method,
                                                         const std::map<std::string, std::string> &requestHeaders,
-                                                        std::string_view requestBody,
-                                                        int timeout_ms)
+                                                        std::string_view requestBody, int timeout_ms)
 {
     if (!m_taskHandle)
     {
@@ -262,8 +261,11 @@ tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
 tl::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::string_view> url,
                                                         std::optional<esp_http_client_method_t> method,
                                                         const std::map<std::string, std::string> &requestHeaders,
-                                                        std::string_view requestBody,
-                                                        std::optional<int> timeout_ms)
+                                                        std::string_view requestBody
+#ifndef OLD_IDF
+                                                        , std::optional<int> timeout_ms
+#endif
+                                                        )
 {
     if (!m_taskHandle)
     {
@@ -301,6 +303,7 @@ tl::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::strin
             return tl::make_unexpected(std::move(msg));
         }
 
+#ifndef OLD_IDF
     if (timeout_ms)
         if (const auto result = m_client.set_timeout_ms(*timeout_ms); result != ESP_OK)
         {
@@ -308,6 +311,7 @@ tl::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::strin
             ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
             return tl::make_unexpected(std::move(msg));
         }
+#endif
 
     for (auto iter = std::cbegin(requestHeaders); iter != std::cend(requestHeaders); iter++)
         if (const auto result = m_client.set_header(iter->first, iter->second); result != ESP_OK)
