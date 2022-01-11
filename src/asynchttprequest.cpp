@@ -212,9 +212,8 @@ tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
 
     if (m_client)
     {
-        constexpr auto msg = "http client not null";
-        ESP_LOGW(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        ESP_LOGW(TAG, "old http client still constructed, destructing now");
+        m_client = {};
     }
 
     if (auto result = createClient(url, method, timeout_ms); !result)
@@ -523,10 +522,9 @@ void AsyncHttpRequest::requestTask()
             m_statusCode = m_client.get_status_code();
         }
 
-        // workaround for esp-idf bug, every request after the first one fails with ESP_ERR_HTTP_FETCH_HEADER
-        const auto result = m_client.close();
-        ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_VERBOSE : ESP_LOG_ERROR), TAG, "m_client.close() returned: %s", esp_err_to_name(result));
-        if (result == ESP_OK)
-            m_client = {};
+        {
+            const auto result = m_client.close();
+            ESP_LOGD(TAG, "m_client.close() returned: %s", esp_err_to_name(result));
+        }
     }
 }
