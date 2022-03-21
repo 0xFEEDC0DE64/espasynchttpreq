@@ -15,6 +15,7 @@
 
 // 3rdparty lib includes
 #include <fmt/core.h>
+#include <cpputils.h>
 
 // local includes
 #include "cleanuphelper.h"
@@ -508,7 +509,7 @@ void AsyncHttpRequest::requestTask()
             {
                 m_buf.clear();
                 result = m_client.perform();
-                ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_DEBUG : (result == EAGAIN || result == EINPROGRESS ? ESP_LOG_INFO : ESP_LOG_WARN)),
+                ESP_LOG_LEVEL_LOCAL((cpputils::is_in(result, ESP_OK, EAGAIN, EINPROGRESS) ? ESP_LOG_DEBUG : ESP_LOG_WARN),
                                     TAG, "m_client.perform() returned: %s", result == EAGAIN ? "EAGAIN" : esp_err_to_name(result));
 
                 if (m_eventGroup.clearBits(ABORT_REQUEST_BIT) & ABORT_REQUEST_BIT)
