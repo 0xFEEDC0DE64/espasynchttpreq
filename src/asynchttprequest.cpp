@@ -155,6 +155,7 @@ tl::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view 
     config.timeout_ms = timeout_ms;
     config.event_handler = staticHttpEventHandler;
     config.user_data = this;
+    config.is_async = true;
 
     m_client = espcpputils::http_client{&config};
 
@@ -505,9 +506,10 @@ void AsyncHttpRequest::requestTask()
             esp_err_t result;
             do
             {
+                m_buf.clear();
                 result = m_client.perform();
-                ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_VERBOSE : (result == EAGAIN || result == EINPROGRESS ? ESP_LOG_INFO : ESP_LOG_WARN)),
-                                    TAG, "m_client.perform() returned: %s", esp_err_to_name(result));
+                ESP_LOG_LEVEL_LOCAL((result == ESP_OK ? ESP_LOG_DEBUG : (result == EAGAIN || result == EINPROGRESS ? ESP_LOG_INFO : ESP_LOG_WARN)),
+                                    TAG, "m_client.perform() returned: %s", result == EAGAIN ? "EAGAIN" : esp_err_to_name(result));
 
                 if (m_eventGroup.clearBits(ABORT_REQUEST_BIT) & ABORT_REQUEST_BIT)
                 {
