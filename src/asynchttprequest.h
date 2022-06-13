@@ -4,6 +4,7 @@
 #include <string>
 #include <string_view>
 #include <map>
+#include <optional>
 
 // esp-idf includes
 #include <freertos/FreeRTOS.h>
