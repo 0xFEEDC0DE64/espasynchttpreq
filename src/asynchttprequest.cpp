@@ -48,20 +48,20 @@ AsyncHttpRequest::~AsyncHttpRequest()
     endTask();
 }
 
-tl::expected<void, std::string> AsyncHttpRequest::startTask()
+std::expected<void, std::string> AsyncHttpRequest::startTask()
 {
     if (m_taskHandle)
     {
         constexpr auto msg = "http task handle is not null";
         ESP_LOGW(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        return std::unexpected(msg);
     }
 
     if (const auto bits = m_eventGroup.getBits(); bits & TASK_RUNNING_BIT)
     {
         constexpr auto msg = "http task already running";
         ESP_LOGW(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        return std::unexpected(msg);
     }
 
     m_eventGroup.clearBits(TASK_RUNNING_BIT | START_REQUEST_BIT | REQUEST_RUNNING_BIT | REQUEST_FINISHED_BIT | END_TASK_BIT | TASK_ENDED_BIT | ABORT_REQUEST_BIT);
@@ -71,14 +71,14 @@ tl::expected<void, std::string> AsyncHttpRequest::startTask()
     {
         auto msg = fmt::format("failed creating http task {}", result);
         ESP_LOGE(TAG, "%.*s", msg.size(), msg.data());
-        return tl::make_unexpected(std::move(msg));
+        return std::unexpected(std::move(msg));
     }
 
     if (!m_taskHandle)
     {
         constexpr auto msg = "http task handle is null";
         ESP_LOGW(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        return std::unexpected(msg);
     }
 
     ESP_LOGD(TAG, "created http task %s", m_taskName);
@@ -97,7 +97,7 @@ tl::expected<void, std::string> AsyncHttpRequest::startTask()
     return {};
 }
 
-tl::expected<void, std::string> AsyncHttpRequest::endTask()
+std::expected<void, std::string> AsyncHttpRequest::endTask()
 {
     if (const auto bits = m_eventGroup.getBits();
         !(bits & TASK_RUNNING_BIT))
@@ -106,7 +106,7 @@ tl::expected<void, std::string> AsyncHttpRequest::endTask()
     {
         constexpr auto msg = "Another end request is already pending";
         ESP_LOGE(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        return std::unexpected(msg);
     }
 
     m_eventGroup.setBits(END_TASK_BIT);
@@ -139,14 +139,14 @@ bool AsyncHttpRequest::taskRunning() const
     return false;
 }
 
-tl::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view url, esp_http_client_method_t method,
+std::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view url, esp_http_client_method_t method,
                                                                int timeout_ms)
 {
     if (m_client)
     {
         constexpr auto msg = "m_client already created";
         ESP_LOGE(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        return std::unexpected(msg);
     }
 
     esp_http_client_config_t config{};
@@ -164,7 +164,7 @@ tl::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view 
     {
         auto msg = fmt::format("http client could not be constructed (url={})", url);
         ESP_LOGE(TAG, "%.*s", msg.size(), msg.data());
-        return tl::make_unexpected(std::move(msg));
+        return std::unexpected(std::move(msg));
     }
 
     ESP_LOGD(TAG, "created http client %s", m_taskName);
@@ -172,7 +172,7 @@ tl::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view 
     return {};
 }
 
-tl::expected<void, std::string> AsyncHttpRequest::deleteClient()
+std::expected<void, std::string> AsyncHttpRequest::deleteClient()
 {
     if (!m_client)
         return {};
@@ -181,7 +181,7 @@ tl::expected<void, std::string> AsyncHttpRequest::deleteClient()
     {
         constexpr auto msg = "request still in progress";
         ESP_LOGW(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        return std::unexpected(msg);
     }
 
     m_client = {};
@@ -194,7 +194,7 @@ bool AsyncHttpRequest::hasClient() const
     return m_client;
 }
 
-tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
+std::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
                                                         esp_http_client_method_t method,
                                                         const std::map<std::string, std::string> &requestHeaders,
                                                         std::string_view requestBody, int timeout_ms)
@@ -202,14 +202,14 @@ tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
     if (!m_taskHandle)
     {
         if (auto result = startTask(); !result)
-            return tl::make_unexpected(std::move(result).error());
+            return std::unexpected(std::move(result).error());
     }
 
     if (inProgress())
     {
         constexpr auto msg = "another request still in progress";
         ESP_LOGW(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        return std::unexpected(msg);
     }
 
     if (m_client)
@@ -219,14 +219,14 @@ tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
     }
 
     if (auto result = createClient(url, method, timeout_ms); !result)
-        return tl::make_unexpected(std::move(result).error());
+        return std::unexpected(std::move(result).error());
 
     for (auto iter = std::cbegin(requestHeaders); iter != std::cend(requestHeaders); iter++)
         if (const auto result = m_client.set_header(iter->first, iter->second); result != ESP_OK)
         {
             auto msg = fmt::format("m_client.set_header() failed: {} ({} {})", esp_err_to_name(result), iter->first, iter->second);
             ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return tl::make_unexpected(std::move(msg));
+            return std::unexpected(std::move(msg));
         }
 
     if (!requestBody.empty())
@@ -235,19 +235,19 @@ tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
         {
             auto msg = fmt::format("m_client.open() failed: {} ({})", esp_err_to_name(result), requestBody.size());
             ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return tl::make_unexpected(std::move(msg));
+            return std::unexpected(std::move(msg));
         }
         if (const auto written = m_client.write(requestBody); written < 0)
         {
             auto msg = fmt::format("m_client.write() failed: {}", written);
             ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return tl::make_unexpected(std::move(msg));
+            return std::unexpected(std::move(msg));
         }
         else if (written != requestBody.size())
         {
             auto msg = fmt::format("m_client.write() written size mismatch: {} != {}", written, requestBody.size());
             ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return tl::make_unexpected(std::move(msg));
+            return std::unexpected(std::move(msg));
         }
     }
 
@@ -259,7 +259,7 @@ tl::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
     return {};
 }
 
-tl::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::string_view> url,
+std::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::string_view> url,
                                                         std::optional<esp_http_client_method_t> method,
                                                         const std::map<std::string, std::string> &requestHeaders,
                                                         std::string_view requestBody
@@ -271,21 +271,21 @@ tl::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::strin
     if (!m_taskHandle)
     {
         if (auto result = startTask(); !result)
-            return tl::make_unexpected(std::move(result).error());
+            return std::unexpected(std::move(result).error());
     }
 
     if (inProgress())
     {
         constexpr auto msg = "another request still in progress";
         ESP_LOGW(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        return std::unexpected(msg);
     }
 
     if (!m_client)
     {
         constexpr auto msg = "http client is null";
         ESP_LOGW(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        return std::unexpected(msg);
     }
 
     if (url)
@@ -293,7 +293,7 @@ tl::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::strin
         {
             auto msg = fmt::format("m_client.set_url() failed: {} ({})", esp_err_to_name(result), *url);
             ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return tl::make_unexpected(std::move(msg));
+            return std::unexpected(std::move(msg));
         }
 
     if (method)
@@ -301,7 +301,7 @@ tl::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::strin
         {
             auto msg = fmt::format("m_client.set_method() failed: {}", esp_err_to_name(result));
             ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return tl::make_unexpected(std::move(msg));
+            return std::unexpected(std::move(msg));
         }
 
 #ifndef OLD_IDF
@@ -310,7 +310,7 @@ tl::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::strin
         {
             auto msg = fmt::format("m_client.set_timeout_ms() failed: {}", esp_err_to_name(result));
             ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return tl::make_unexpected(std::move(msg));
+            return std::unexpected(std::move(msg));
         }
 #endif
 
@@ -319,7 +319,7 @@ tl::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::strin
         {
             auto msg = fmt::format("m_client.set_header() failed: {} ({} {})", esp_err_to_name(result), iter->first, iter->second);
             ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return tl::make_unexpected(std::move(msg));
+            return std::unexpected(std::move(msg));
         }
 
     if (!requestBody.empty())
@@ -328,19 +328,19 @@ tl::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::strin
         {
             auto msg = fmt::format("m_client.open() failed: {} ({})", esp_err_to_name(result), requestBody.size());
             ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return tl::make_unexpected(std::move(msg));
+            return std::unexpected(std::move(msg));
         }
         if (const auto written = m_client.write(requestBody); written < 0)
         {
             auto msg = fmt::format("m_client.write() failed: {}", written);
             ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return tl::make_unexpected(std::move(msg));
+            return std::unexpected(std::move(msg));
         }
         else if (written != requestBody.size())
         {
             auto msg = fmt::format("m_client.write() written size mismatch: {} != {}", written, requestBody.size());
             ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return tl::make_unexpected(std::move(msg));
+            return std::unexpected(std::move(msg));
         }
     }
 
@@ -352,12 +352,12 @@ tl::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::strin
     return {};
 }
 
-tl::expected<void, std::string> AsyncHttpRequest::abort()
+std::expected<void, std::string> AsyncHttpRequest::abort()
 {
     if (const auto bits = m_eventGroup.getBits(); !(bits & (START_REQUEST_BIT | REQUEST_RUNNING_BIT)))
-        return tl::make_unexpected("no ota job is running!");
+        return std::unexpected("no ota job is running!");
     else if (bits & ABORT_REQUEST_BIT)
-        return tl::make_unexpected("an abort has already been requested!");
+        return std::unexpected("an abort has already been requested!");
 
     m_eventGroup.setBits(ABORT_REQUEST_BIT);
     ESP_LOGI(TAG, "http request abort requested");
@@ -375,24 +375,24 @@ bool AsyncHttpRequest::finished() const
     return m_eventGroup.getBits() & REQUEST_FINISHED_BIT;
 }
 
-tl::expected<void, std::string> AsyncHttpRequest::result() const
+std::expected<void, std::string> AsyncHttpRequest::result() const
 {
     if (const auto bits = m_eventGroup.getBits();
         bits & REQUEST_RUNNING_BIT)
     {
         constexpr auto msg = "request still running";
         ESP_LOGW(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        return std::unexpected(msg);
     }
     else if (!(bits & REQUEST_FINISHED_BIT))
     {
         constexpr auto msg = "request not finished";
         ESP_LOGW(TAG, "%s", msg);
-        return tl::make_unexpected(msg);
+        return std::unexpected(msg);
     }
 
     if (m_result != ESP_OK)
-        return tl::make_unexpected(fmt::format("http request failed: {}", esp_err_to_name(m_result)));
+        return std::unexpected(fmt::format("http request failed: {}", esp_err_to_name(m_result)));
 
     return {};
 }

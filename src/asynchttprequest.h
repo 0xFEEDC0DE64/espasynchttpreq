@@ -5,14 +5,12 @@
 #include <string_view>
 #include <map>
 #include <optional>
+#include <expected>
 
 // esp-idf includes
 #include <freertos/FreeRTOS.h>
 #include <freertos/task.h>
 #include <esp_err.h>
-
-// 3rdparty lib includes
-#include <tl/expected.hpp>
 
 // local includes
 #include "wrappers/http_client.h"
@@ -25,21 +23,21 @@ public:
     AsyncHttpRequest(const char *taskName="httpRequestTask", espcpputils::CoreAffinity coreAffinity=espcpputils::CoreAffinity::Core1);
     ~AsyncHttpRequest();
 
-    tl::expected<void, std::string> startTask();
-    tl::expected<void, std::string> endTask();
+    std::expected<void, std::string> startTask();
+    std::expected<void, std::string> endTask();
     bool taskRunning() const;
 
-    tl::expected<void, std::string> createClient(std::string_view url,
+    std::expected<void, std::string> createClient(std::string_view url,
                                                  esp_http_client_method_t method = HTTP_METHOD_GET,
                                                  int timeout_ms = 0);
-    tl::expected<void, std::string> deleteClient();
+    std::expected<void, std::string> deleteClient();
     bool hasClient() const;
 
-    tl::expected<void, std::string> start(std::string_view url,
+    std::expected<void, std::string> start(std::string_view url,
                                           esp_http_client_method_t method = HTTP_METHOD_GET,
                                           const std::map<std::string, std::string> &requestHeaders = {},
                                           std::string_view requestBody = {}, int timeout_ms = 0);
-    tl::expected<void, std::string> retry(std::optional<std::string_view> url = std::nullopt,
+    std::expected<void, std::string> retry(std::optional<std::string_view> url = std::nullopt,
                                           std::optional<esp_http_client_method_t> method = std::nullopt,
                                           const std::map<std::string, std::string> &requestHeaders = {},
                                           std::string_view requestBody = {}
@@ -47,12 +45,12 @@ public:
                                           ,std::optional<int> timeout_ms = {}
 #endif
                                          );
-    tl::expected<void, std::string> abort();
+    std::expected<void, std::string> abort();
 
     bool inProgress() const;
 
     bool finished() const;
-    tl::expected<void, std::string> result() const;
+    std::expected<void, std::string> result() const;
 
     int statusCode() const { return m_statusCode; }
 

@@ -11,7 +11,6 @@ set(dependencies
     espchrono
     espcpputils
     esp_http_client
-    expected
     fmt
 )
 
