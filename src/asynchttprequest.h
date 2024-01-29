@@ -12,10 +12,11 @@
 #include <freertos/task.h>
 #include <esp_err.h>
 
-// local includes
-#include "wrappers/http_client.h"
-#include "wrappers/event_group.h"
-#include "taskutils.h"
+// 3rdparty lib includes
+#include <wrappers/http_client.h>
+#include <wrappers/event_group.h>
+#include <taskutils.h>
+#include <clientauth.h>
 
 class AsyncHttpRequest
 {
@@ -28,23 +29,22 @@ public:
     bool taskRunning() const;
 
     std::expected<void, std::string> createClient(std::string_view url,
-                                                 esp_http_client_method_t method = HTTP_METHOD_GET,
-                                                 int timeout_ms = 0);
+                                                  esp_http_client_method_t method = HTTP_METHOD_GET,
+                                                  int timeout_ms = 0,
+                                                  const std::optional<cpputils::ClientAuth> &clientAuth = {});
     std::expected<void, std::string> deleteClient();
     bool hasClient() const;
 
     std::expected<void, std::string> start(std::string_view url,
-                                          esp_http_client_method_t method = HTTP_METHOD_GET,
-                                          const std::map<std::string, std::string> &requestHeaders = {},
-                                          std::string_view requestBody = {}, int timeout_ms = 0);
+                                           esp_http_client_method_t method = HTTP_METHOD_GET,
+                                           const std::map<std::string, std::string> &requestHeaders = {},
+                                           std::string_view requestBody = {}, int timeout_ms = 0,
+                                           const std::optional<cpputils::ClientAuth> &clientAuth = {});
     std::expected<void, std::string> retry(std::optional<std::string_view> url = std::nullopt,
-                                          std::optional<esp_http_client_method_t> method = std::nullopt,
-                                          const std::map<std::string, std::string> &requestHeaders = {},
-                                          std::string_view requestBody = {}
-#ifndef OLD_IDF
-                                          ,std::optional<int> timeout_ms = {}
-#endif
-                                         );
+                                           std::optional<esp_http_client_method_t> method = std::nullopt,
+                                           const std::map<std::string, std::string> &requestHeaders = {},
+                                           std::string_view requestBody = {}, std::optional<int> timeout_ms = {},
+                                           const std::optional<cpputils::ClientAuth> &clientAuth = {});
     std::expected<void, std::string> abort();
 
     bool inProgress() const;
