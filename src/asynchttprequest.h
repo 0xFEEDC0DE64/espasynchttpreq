@@ -43,8 +43,7 @@ public:
     std::expected<void, std::string> retry(std::optional<std::string_view> url = std::nullopt,
                                            std::optional<esp_http_client_method_t> method = std::nullopt,
                                            const std::map<std::string, std::string> &requestHeaders = {},
-                                           std::string_view requestBody = {}, std::optional<int> timeout_ms = {},
-                                           const std::optional<cpputils::ClientAuth> &clientAuth = {});
+                                           std::string_view requestBody = {}, std::optional<int> timeout_ms = {});
     std::expected<void, std::string> abort();
 
     bool inProgress() const;

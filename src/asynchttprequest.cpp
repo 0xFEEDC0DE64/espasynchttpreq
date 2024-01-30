@@ -150,14 +150,23 @@ std::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view
         return std::unexpected(msg);
     }
 
-    esp_http_client_config_t config{};
-    config.url = url.data();
-    config.max_authorization_retries = 1;
-    config.method = method;
-    config.timeout_ms = timeout_ms;
-    config.event_handler = staticHttpEventHandler;
-    config.user_data = this;
-    config.is_async = true;
+    esp_http_client_config_t config {
+        .url = url.data(),
+        .method = method,
+        .timeout_ms = timeout_ms,
+        .max_authorization_retries = 1,
+        .event_handler = staticHttpEventHandler,
+        .user_data = this,
+        .is_async = true,
+    };
+
+    if (clientAuth)
+    {
+        config.client_key_pem = clientAuth->clientKey.data();
+        config.client_key_len = clientAuth->clientKey.size();
+        config.client_cert_pem = clientAuth->clientCert.data();
+        config.client_cert_len = clientAuth->clientCert.size();
+    }
 
     m_client = espcpputils::http_client{&config};
 
@@ -264,8 +273,7 @@ std::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
 std::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::string_view> url,
                                                          std::optional<esp_http_client_method_t> method,
                                                          const std::map<std::string, std::string> &requestHeaders,
-                                                         std::string_view requestBody, std::optional<int> timeout_ms,
-                                                         const std::optional<cpputils::ClientAuth> &clientAuth)
+                                                         std::string_view requestBody, std::optional<int> timeout_ms)
 {
     if (!m_taskHandle)
     {
