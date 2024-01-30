@@ -16,11 +16,9 @@
 // 3rdparty lib includes
 #include <fmt/core.h>
 #include <cpputils.h>
-
-// local includes
-#include "cleanuphelper.h"
-#include "taskutils.h"
-#include "tickchrono.h"
+#include <cleanuphelper.h>
+#include <taskutils.h>
+#include <tickchrono.h>
 
 using namespace std::chrono_literals;
 
@@ -514,8 +512,8 @@ void AsyncHttpRequest::requestTask()
             {
                 m_buf.clear();
                 result = m_client.perform();
-                ESP_LOG_LEVEL_LOCAL((cpputils::is_in(result, ESP_OK, EAGAIN, EINPROGRESS) ? ESP_LOG_DEBUG : ESP_LOG_WARN),
-                                    TAG, "m_client.perform() returned: %s", result == EAGAIN ? "EAGAIN" : esp_err_to_name(result));
+                ESP_LOG_LEVEL_LOCAL((cpputils::is_in(result, ESP_OK, EAGAIN, EINPROGRESS, ESP_ERR_HTTP_EAGAIN) ? ESP_LOG_DEBUG : ESP_LOG_WARN),
+                                    TAG, "m_client.perform() returned: %s", result == EAGAIN ? "EAGAIN" : (result == EINPROGRESS ? "EINPROGRESS" : esp_err_to_name(result)));
 
                 if (m_eventGroup.clearBits(ABORT_REQUEST_BIT) & ABORT_REQUEST_BIT)
                 {
@@ -524,7 +522,7 @@ void AsyncHttpRequest::requestTask()
                     break;
                 }
             }
-            while (result == EAGAIN || result == EINPROGRESS);
+            while (cpputils::is_in(result, EAGAIN, EINPROGRESS, ESP_ERR_HTTP_EAGAIN));
 
             m_result = result;
             m_statusCode = m_client.get_status_code();
