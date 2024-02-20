@@ -21,7 +21,7 @@
 class AsyncHttpRequest
 {
 public:
-    AsyncHttpRequest(const char *taskName="httpRequestTask", espcpputils::CoreAffinity coreAffinity=espcpputils::CoreAffinity::Core1);
+    AsyncHttpRequest(const char *taskName="httpRequestTask", espcpputils::CoreAffinity coreAffinity=espcpputils::CoreAffinity::Core1, uint32_t taskSize = 3096);
     ~AsyncHttpRequest();
 
     std::expected<void, std::string> startTask();
@@ -84,5 +84,6 @@ private:
     std::map<std::string, std::string> m_responseHeaders;
 
     const char * const m_taskName;
+    const uint32_t m_taskSize;
     const espcpputils::CoreAffinity m_coreAffinity;
 };

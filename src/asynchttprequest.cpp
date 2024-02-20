@@ -34,8 +34,9 @@ constexpr int TASK_ENDED_BIT = BIT5;
 constexpr int ABORT_REQUEST_BIT = BIT6;
 } // namespace
 
-AsyncHttpRequest::AsyncHttpRequest(const char *taskName, espcpputils::CoreAffinity coreAffinity) :
+AsyncHttpRequest::AsyncHttpRequest(const char *taskName, espcpputils::CoreAffinity coreAffinity, uint32_t taskSize) :
     m_taskName{taskName},
+    m_taskSize{taskSize},
     m_coreAffinity{coreAffinity}
 {
     assert(m_eventGroup.handle);
@@ -64,7 +65,7 @@ std::expected<void, std::string> AsyncHttpRequest::startTask()
 
     m_eventGroup.clearBits(TASK_RUNNING_BIT | START_REQUEST_BIT | REQUEST_RUNNING_BIT | REQUEST_FINISHED_BIT | END_TASK_BIT | TASK_ENDED_BIT | ABORT_REQUEST_BIT);
 
-    if (auto result = espcpputils::createTask(requestTask, m_taskName, 3096, this, 10, &m_taskHandle, m_coreAffinity);
+    if (auto result = espcpputils::createTask(requestTask, m_taskName, m_taskSize, this, 10, &m_taskHandle, m_coreAffinity);
         result != pdPASS)
     {
         auto msg = fmt::format("failed creating http task {}", result);
