@@ -523,6 +523,8 @@ void AsyncHttpRequest::requestTask()
                     result = ESP_FAIL;
                     break;
                 }
+
+                espcpputils::delay(500ms);
             }
             while (cpputils::is_in(result, EAGAIN, EINPROGRESS, ESP_ERR_HTTP_EAGAIN));
 
