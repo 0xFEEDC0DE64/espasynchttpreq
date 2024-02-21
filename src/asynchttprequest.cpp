@@ -151,6 +151,7 @@ std::expected<void, std::string> AsyncHttpRequest::createClient(std::string_view
 
     esp_http_client_config_t config {
         .url = url.data(),
+        .user_agent = "Browsinator 3000 (ESP32-9000X Super Fun Edition) Quantum Entangled Gecko/42.0 LOLMobile Safari",
         .method = method,
         .timeout_ms = timeout_ms,
         .max_authorization_retries = 1,
