@@ -38,12 +38,12 @@ public:
     std::expected<void, std::string> start(std::string_view url,
                                            esp_http_client_method_t method = HTTP_METHOD_GET,
                                            const std::map<std::string, std::string> &requestHeaders = {},
-                                           std::string_view requestBody = {}, int timeout_ms = 0,
+                                           std::string &&requestBody = {}, int timeout_ms = 0,
                                            const std::optional<cpputils::ClientAuth> &clientAuth = {});
     std::expected<void, std::string> retry(std::optional<std::string_view> url = std::nullopt,
                                            std::optional<esp_http_client_method_t> method = std::nullopt,
                                            const std::map<std::string, std::string> &requestHeaders = {},
-                                           std::string_view requestBody = {}, std::optional<int> timeout_ms = {});
+                                           std::optional<std::string> &&requestBody = {}, std::optional<int> timeout_ms = {});
     std::expected<void, std::string> abort();
 
     bool inProgress() const;
@@ -82,6 +82,7 @@ private:
     std::size_t m_sizeLimit{4096};
     bool m_collectResponseHeaders{};
     std::map<std::string, std::string> m_responseHeaders;
+    std::string m_requestBody;
 
     const char * const m_taskName;
     const uint32_t m_taskSize;

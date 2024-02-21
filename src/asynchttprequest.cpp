@@ -207,7 +207,7 @@ bool AsyncHttpRequest::hasClient() const
 std::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
                                                          esp_http_client_method_t method,
                                                          const std::map<std::string, std::string> &requestHeaders,
-                                                         std::string_view requestBody, int timeout_ms,
+                                                         std::string &&requestBody, int timeout_ms,
                                                          const std::optional<cpputils::ClientAuth> &clientAuth)
 {
     if (!m_taskHandle)
@@ -232,6 +232,15 @@ std::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
     if (auto result = createClient(url, method, timeout_ms, clientAuth); !result)
         return std::unexpected(std::move(result).error());
 
+    m_requestBody = std::move(requestBody);
+    if (!m_requestBody.empty())
+        if (const auto result = m_client.set_post_field(m_requestBody); result != ESP_OK)
+        {
+            auto msg = fmt::format("m_client.set_post_field() failed with {}", esp_err_to_name(result));
+            ESP_LOGE(TAG, "%.*s", msg.size(), msg.data());
+            return std::unexpected(std::move(msg));
+        }
+
     for (auto iter = std::cbegin(requestHeaders); iter != std::cend(requestHeaders); iter++)
         if (const auto result = m_client.set_header(iter->first, iter->second); result != ESP_OK)
         {
@@ -240,27 +249,6 @@ std::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
             return std::unexpected(std::move(msg));
         }
 
-    if (!requestBody.empty())
-    {
-        if (const auto result = m_client.open(requestBody.size()); result != ESP_OK)
-        {
-            auto msg = fmt::format("m_client.open() failed: {} ({})", esp_err_to_name(result), requestBody.size());
-            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return std::unexpected(std::move(msg));
-        }
-        if (const auto written = m_client.write(requestBody); written < 0)
-        {
-            auto msg = fmt::format("m_client.write() failed: {}", written);
-            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return std::unexpected(std::move(msg));
-        }
-        else if (written != requestBody.size())
-        {
-            auto msg = fmt::format("m_client.write() written size mismatch: {} != {}", written, requestBody.size());
-            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return std::unexpected(std::move(msg));
-        }
-    }
 
     m_buf.clear();
 
@@ -273,7 +261,7 @@ std::expected<void, std::string> AsyncHttpRequest::start(std::string_view url,
 std::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::string_view> url,
                                                          std::optional<esp_http_client_method_t> method,
                                                          const std::map<std::string, std::string> &requestHeaders,
-                                                         std::string_view requestBody, std::optional<int> timeout_ms)
+                                                         std::optional<std::string> &&requestBody, std::optional<int> timeout_ms)
 {
     if (!m_taskHandle)
     {
@@ -319,6 +307,18 @@ std::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::stri
             return std::unexpected(std::move(msg));
         }
 
+    if (requestBody)
+    {
+        m_requestBody = std::move(requestBody).value();
+        if (!m_requestBody.empty())
+            if (const auto result = m_client.set_post_field(m_requestBody); result != ESP_OK)
+            {
+                auto msg = fmt::format("m_client.set_post_field() failed with {}", esp_err_to_name(result));
+                ESP_LOGE(TAG, "%.*s", msg.size(), msg.data());
+                return std::unexpected(std::move(msg));
+            }
+    }
+
     for (auto iter = std::cbegin(requestHeaders); iter != std::cend(requestHeaders); iter++)
         if (const auto result = m_client.set_header(iter->first, iter->second); result != ESP_OK)
         {
@@ -326,28 +326,6 @@ std::expected<void, std::string> AsyncHttpRequest::retry(std::optional<std::stri
             ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
             return std::unexpected(std::move(msg));
         }
-
-    if (!requestBody.empty())
-    {
-        if (const auto result = m_client.open(requestBody.size()); result != ESP_OK)
-        {
-            auto msg = fmt::format("m_client.open() failed: {} ({})", esp_err_to_name(result), requestBody.size());
-            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return std::unexpected(std::move(msg));
-        }
-        if (const auto written = m_client.write(requestBody); written < 0)
-        {
-            auto msg = fmt::format("m_client.write() failed: {}", written);
-            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return std::unexpected(std::move(msg));
-        }
-        else if (written != requestBody.size())
-        {
-            auto msg = fmt::format("m_client.write() written size mismatch: {} != {}", written, requestBody.size());
-            ESP_LOGW(TAG, "%.*s", msg.size(), msg.data());
-            return std::unexpected(std::move(msg));
-        }
-    }
 
     m_buf.clear();
 
@@ -496,7 +474,7 @@ void AsyncHttpRequest::requestTask()
 
         {
             const auto bits = m_eventGroup.getBits();
-            assert(!(bits & START_REQUEST_BIT));
+            // assert(!(bits & START_REQUEST_BIT));
             assert(!(bits & REQUEST_RUNNING_BIT));
             assert(!(bits & REQUEST_FINISHED_BIT));
         }
