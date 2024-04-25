@@ -113,7 +113,7 @@ std::expected<void, std::string> AsyncHttpRequest::endTask()
     if (const auto bits = m_eventGroup.waitBits(TASK_ENDED_BIT, true, false, std::chrono::ceil<espcpputils::ticks>(1s).count());
         bits & TASK_ENDED_BIT)
     {
-        ESP_LOGD(TAG, "http task %s ended", m_taskName);
+        ESP_LOGI(TAG, "http task %s ended", m_taskName);
         return {};
     }
 
@@ -124,7 +124,7 @@ std::expected<void, std::string> AsyncHttpRequest::endTask()
             bits & TASK_ENDED_BIT)
             break;
 
-    ESP_LOGD(TAG, "http task %s ended", m_taskName);
+    ESP_LOGI(TAG, "http task %s ended", m_taskName);
 
     return {};
 }
@@ -453,9 +453,11 @@ void AsyncHttpRequest::requestTask(void *ptr)
 void AsyncHttpRequest::requestTask()
 {
     m_eventGroup.setBits(TASK_RUNNING_BIT);
+    ESP_LOGI(TAG, "%s task started", m_taskName);
 
     // cleanup on task exit
     auto helper = cpputils::makeCleanupHelper([&](){
+        ESP_LOGI(TAG, "%s task ended", m_taskName);
         m_eventGroup.clearBits(TASK_RUNNING_BIT);
         m_eventGroup.setBits(TASK_ENDED_BIT);
         m_taskHandle = NULL;
@@ -464,11 +466,23 @@ void AsyncHttpRequest::requestTask()
 
     while (true)
     {
-        if (const auto bits = m_eventGroup.waitBits(START_REQUEST_BIT|END_TASK_BIT, true, false, portMAX_DELAY);
+        ESP_LOGI(TAG, "%s waiting for instructions...", m_taskName);
+        if (const auto bits = m_eventGroup.waitBits(START_REQUEST_BIT|END_TASK_BIT, true, false, std::chrono::ceil<espcpputils::ticks>(15s).count());
             bits & END_TASK_BIT)
+        {
+            ESP_LOGI(TAG, "%s task end requested", m_taskName);
             break;
-        else if (!(bits & START_REQUEST_BIT))
-            continue;
+        }
+        else if (bits & START_REQUEST_BIT)
+        {
+            ESP_LOGI(TAG, "%s start request requested", m_taskName);
+            //break;
+        }
+        else
+        {
+            ESP_LOGI(TAG, "%s timeout ends task", m_taskName);
+            break;
+        }
 
         assert(m_client);
 
@@ -482,6 +496,7 @@ void AsyncHttpRequest::requestTask()
         m_eventGroup.setBits(REQUEST_RUNNING_BIT);
 
         auto helper2 = cpputils::makeCleanupHelper([&](){
+            ESP_LOGI(TAG, "%s request finished", m_taskName);
             m_eventGroup.clearBits(REQUEST_RUNNING_BIT | ABORT_REQUEST_BIT);
             m_eventGroup.setBits(REQUEST_FINISHED_BIT);
         });
