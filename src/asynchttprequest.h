@@ -31,6 +31,7 @@ public:
     std::expected<void, std::string> createClient(std::string_view url,
                                                   esp_http_client_method_t method = HTTP_METHOD_GET,
                                                   int timeout_ms = 0,
+                                                  std::string_view serverCert = {},
                                                   const std::optional<cpputils::ClientAuth> &clientAuth = {});
     std::expected<void, std::string> deleteClient();
     bool hasClient() const;
@@ -39,6 +40,7 @@ public:
                                            esp_http_client_method_t method = HTTP_METHOD_GET,
                                            const std::map<std::string, std::string> &requestHeaders = {},
                                            std::string &&requestBody = {}, int timeout_ms = 0,
+                                           std::string_view serverCert = {},
                                            const std::optional<cpputils::ClientAuth> &clientAuth = {});
     std::expected<void, std::string> retry(std::optional<std::string_view> url = std::nullopt,
                                            std::optional<esp_http_client_method_t> method = std::nullopt,
